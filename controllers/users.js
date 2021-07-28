@@ -1,11 +1,9 @@
 /** @type {import("express").RequestHandler} */
+/** @type {import("mongoose").RequestHandler} */
 
-const create = (req, res) => {
-  res.json({
-    ...req.body,
-    ok: true,
-  });
-};
+const createUser = require("./create-user");
+
+const create = createUser;
 
 module.exports = {
   create,
