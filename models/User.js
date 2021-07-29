@@ -1,7 +1,11 @@
 const { Schema, model } = require("mongoose");
 
 const UserSchema = Schema({
-  last_name: {
+  firstname: {
+    type: String,
+    require: true,
+  },
+  lastname: {
     type: String,
     require: true,
   },
@@ -13,6 +17,19 @@ const UserSchema = Schema({
     type: String,
     require: true,
     unique: true,
+  },
+  other_names: {
+    type: String,
+  },
+  country: {
+    name: {
+      type: String,
+      require: true,
+    },
+    abbr: {
+      type: String,
+      require: true,
+    },
   },
   seq: {
     type: Number,

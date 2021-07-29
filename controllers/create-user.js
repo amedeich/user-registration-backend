@@ -5,12 +5,17 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 
 const updatedUserWithSequenceHandler = async (
+  firstname,
   lastName,
-  secondSurname,
+  region,
   session
 ) => {
   const user = await User.findOneAndUpdate(
-    { last_name: lastName, second_surname: secondSurname },
+    {
+      firstname: firstname,
+      lastname: lastName,
+      "country.abbr": { $in: [region] },
+    },
     { $inc: { seq: 1 } },
     { new: true, session }
   );
@@ -22,23 +27,20 @@ const updatedUserHandler = async (
   updatedUserWithSequence,
   response
 ) => {
-  const { _id, email, seq } = updatedUserWithSequence;
+  const { email, seq } = updatedUserWithSequence;
   let [mail, domain] = email.split("@");
-  mail =
-    seq > 1
-      ? `${mail.substring(0, mail.lastIndexOf(".") + 1)}${seq}`
-      : (mail += `.${seq}`);
+  mail += `.${seq}`;
   const updatedMail = `${mail}@${domain}`;
   try {
-    const updatedUser = await User.findOneAndUpdate(
-      { _id },
-      { email: updatedMail },
-      { new: true, session }
-    );
+    const { _id, _v, ...userWithNewEmail } = {
+      ...updatedUserWithSequence.toObject(),
+    };
+    const newUser = new User({ ...userWithNewEmail, email: updatedMail });
+    await newUser.save({ session });
     await session.commitTransaction();
     session.endSession();
     return response.status(200).json({
-      ...updatedUser._doc,
+      ...newUser._doc,
       ok: true,
     });
   } catch (error) {
@@ -71,9 +73,14 @@ const createUserHandler = async (body, response) => {
 const beginCreateUser = async (req, res) => {
   let updatedUserWithSequence = undefined;
 
-  const { last_name, second_surname } = req.body;
+  const { firstname, lastname } = req.body;
 
-  const generatedMail = `${last_name}.${second_surname}@cidenet.es`;
+  const { abbr: region } = req.body.country;
+
+  const generatedMail = `${firstname}.${lastname.replace(
+    /\s/g,
+    ""
+  )}@cidenet.com.${region}`;
 
   req.body = { ...req.body, email: generatedMail.toLowerCase() };
 
@@ -82,8 +89,9 @@ const beginCreateUser = async (req, res) => {
   try {
     session.withTransaction(async (_) => {
       updatedUserWithSequence = await updatedUserWithSequenceHandler(
-        last_name,
-        second_surname,
+        firstname,
+        lastname,
+        region,
         session
       );
 
