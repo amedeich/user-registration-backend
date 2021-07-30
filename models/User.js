@@ -40,6 +40,10 @@ const UserSchema = Schema({
       type: String,
       required: true,
     },
+    slug: {
+      type: String,
+      required: true,
+    },
   },
   seq: {
     type: Number,

@@ -52,8 +52,8 @@ const validations = [
     .isEmpty()
     .withMessage("El document es requerido")
     .custom((document) => {
-      const { name, number } = document;
-      if (!name || !number) {
+      const { name, number, slug } = document;
+      if (!name || !number || !slug) {
         return false;
       }
       const regex = /(?=^[a-zA-Z0-9-]+$)(?=^.{1,20}$)/;
