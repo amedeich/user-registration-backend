@@ -31,6 +31,16 @@ const UserSchema = Schema({
       require: true,
     },
   },
+  document: {
+    name: {
+      type: String,
+      required: true,
+    },
+    number: {
+      type: String,
+      required: true,
+    },
+  },
   seq: {
     type: Number,
     default: 0,

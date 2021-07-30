@@ -4,78 +4,21 @@ const mongoose = require("mongoose");
 
 const User = require("../models/User");
 
-const updatedUserWithSequenceHandler = async (
-  firstname,
-  lastName,
-  region,
-  session
-) => {
-  const user = await User.findOneAndUpdate(
-    {
-      firstname: firstname,
-      lastname: lastName,
-      "country.abbr": { $in: [region] },
-    },
-    { $inc: { seq: 1 } },
-    { new: true, session }
-  );
-  return user;
-};
-
-const updatedUserHandler = async (
-  session,
-  updatedUserWithSequence,
-  response
-) => {
-  const { email, seq } = updatedUserWithSequence;
-  let [mail, domain] = email.split("@");
-  mail += `.${seq}`;
-  const updatedMail = `${mail}@${domain}`;
-  try {
-    const { _id, _v, ...userWithNewEmail } = {
-      ...updatedUserWithSequence.toObject(),
-    };
-    const newUser = new User({ ...userWithNewEmail, email: updatedMail });
-    await newUser.save({ session });
-    await session.commitTransaction();
-    session.endSession();
-    return response.status(200).json({
-      ...newUser._doc,
-      ok: true,
-    });
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    return response.status(400).json({
-      msg: "no se puede actualizar el usuario",
-      error,
-      ok: false,
-    });
-  }
-};
-
-const createUserHandler = async (body, response) => {
-  try {
-    const userModel = new User(body);
-    await userModel.save();
-    response.status(201).json({
-      ...userModel.toObject(),
-      ok: true,
-    });
-  } catch (error) {
-    response.status(400).json({
-      error,
-      ok: false,
-    });
-  }
-};
-
 const beginCreateUser = async (req, res) => {
-  let updatedUserWithSequence = undefined;
-
-  const { firstname, lastname } = req.body;
+  const { firstname, lastname, document } = req.body;
 
   const { abbr: region } = req.body.country;
+
+  const doesUserExists = await User.findOne({
+    document,
+  });
+
+  if (doesUserExists) {
+    return res.status(409).json({
+      msg: `Ya existe un usuario con el número de identificación: ${document.number} y el tipo de documento: ${document.name}`,
+      ok: false,
+    });
+  }
 
   const generatedMail = `${firstname}.${lastname.replace(
     /\s/g,
@@ -88,20 +31,14 @@ const beginCreateUser = async (req, res) => {
 
   try {
     session.withTransaction(async (_) => {
-      updatedUserWithSequence = await updatedUserWithSequenceHandler(
-        firstname,
-        lastname,
-        region,
-        session
-      );
+      const sequence = await incrementSequenceInUser(req.body, session);
 
-      if (updatedUserWithSequence) {
-        return updatedUserHandler(session, updatedUserWithSequence, res);
+      if (sequence) {
+        const user = { ...req.body, seq: sequence };
+        return createUserWithSequence(session, user, res);
       }
 
       await session.commitTransaction();
-
-      session.endSession();
 
       return createUserHandler(req.body, res);
     });
@@ -112,6 +49,60 @@ const beginCreateUser = async (req, res) => {
       error,
       ok: false,
     });
+  }
+};
+
+const incrementSequenceInUser = async (body, session) => {
+  const { email } = body;
+  const user = await User.findOneAndUpdate(
+    {
+      email: { $regex: email.substr(0, email.lastIndexOf(".")), $options: "i" },
+    },
+    { $inc: { seq: 1 } },
+    { new: true, session }
+  );
+  return user?.seq;
+};
+
+const createUserWithSequence = async (
+  session,
+  updatedUserWithSequence,
+  response
+) => {
+  const { email, seq } = updatedUserWithSequence;
+  let [mail, domain] = email.split("@");
+  mail += `.${seq}`;
+  const updatedMail = `${mail}@${domain}`;
+  return createUserHandler(
+    { ...updatedUserWithSequence, email: updatedMail },
+    response,
+    session
+  );
+};
+
+const createUserHandler = async (body, response, session) => {
+  try {
+    const userModel = new User(body);
+    await userModel.save({ session });
+    if (session) {
+      await session.commitTransaction();
+    }
+    response.status(201).json({
+      ...userModel.toObject(),
+      ok: true,
+    });
+  } catch (error) {
+    if (session) {
+      await session.abortTransaction();
+    }
+    response.status(400).json({
+      error,
+      ok: false,
+    });
+  } finally {
+    if (session) {
+      session.endSession();
+    }
   }
 };
 

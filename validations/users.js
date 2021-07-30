@@ -47,6 +47,19 @@ const validations = [
     .withMessage(
       "El segundo apellido solo admite hasta 20 carácteres de la A a la Z, en mayúscula. "
     ),
+  check("document")
+    .not()
+    .isEmpty()
+    .withMessage("El document es requerido")
+    .custom((document) => {
+      const { name, number } = document;
+      if (!name || !number) {
+        return false;
+      }
+      const regex = /(?=^[a-zA-Z0-9-]+$)(?=^.{1,20}$)/;
+      return regex.test(number);
+    })
+    .withMessage("Documento no válido"),
 ];
 
 module.exports = validations;
